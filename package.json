@@ -1,0 +1,20 @@
+{
+  "name": "pega-mcp-client",
+  "version": "1.0.0",
+  "description": "MCP Client for Pega on Railway",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.21.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2"
+  },
+  "engines": {
+    "node": "18.x"
+  }
+}
