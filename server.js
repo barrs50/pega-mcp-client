@@ -31,21 +31,20 @@ async function initializePegaMCP() {
   try {
     console.log("🔄 Initializing Pega MCP Server...");
 
-    const response = await axios.post(
+    // Step 1: Send initialize request
+    const initResponse = await axios.post(
       PEGA_MCP_URL,
       {
-        jsonrpc: "2.0",
-        id: 1,
         method: "initialize",
+        id: 1,
+        jsonrpc: "2.0",
         params: {
-          protocolVersion: "2024-11-05",
-          capabilities: {
-            sampling: {},
-          },
+          capabilities: {},
           clientInfo: {
-            name: "Railway-MCP-Client",
+            name: "pega-mcp-client",
             version: "1.0.0",
           },
+          protocolVersion: "2024-11-05",
         },
       },
       {
@@ -57,8 +56,27 @@ async function initializePegaMCP() {
       }
     );
 
-    console.log("✅ Pega MCP initialized:", response.data);
-    return response.data;
+    console.log("✅ Initialize response:", initResponse.data);
+
+    // Step 2: Send notifications/initialized
+    console.log("📢 Sending notifications/initialized...");
+    const notifyResponse = await axios.post(
+      PEGA_MCP_URL,
+      {
+        method: "notifications/initialized",
+        jsonrpc: "2.0",
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${PEGA_MCP_TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+      }
+    );
+
+    console.log("✅ Notifications/initialized sent:", notifyResponse.data);
+    return initResponse.data;
   } catch (error) {
     console.error(
       "❌ Failed to initialize Pega MCP:",
@@ -73,12 +91,17 @@ async function initializePegaMCP() {
  */
 async function listPegaTools() {
   try {
+    // First, initialize the session
+    console.log("🔄 Initializing session before listing tools...");
+    await initializePegaMCP();
+
+    // Then list tools
     const response = await axios.post(
       PEGA_MCP_URL,
       {
-        jsonrpc: "2.0",
-        id: 2,
         method: "tools/list",
+        id: 2,
+        jsonrpc: "2.0",
         params: {},
       },
       {
@@ -97,7 +120,10 @@ async function listPegaTools() {
       "❌ Failed to list tools:",
       error.response?.data || error.message
     );
-    return null;
+    return {
+      error: error.message,
+      details: error.response?.data,
+    };
   }
 }
 
@@ -106,12 +132,17 @@ async function listPegaTools() {
  */
 async function listPegaResources() {
   try {
+    // First, initialize the session
+    console.log("🔄 Initializing session before listing resources...");
+    await initializePegaMCP();
+
+    // Then list resources
     const response = await axios.post(
       PEGA_MCP_URL,
       {
-        jsonrpc: "2.0",
-        id: 3,
         method: "resources/list",
+        id: 3,
+        jsonrpc: "2.0",
         params: {},
       },
       {
@@ -130,7 +161,10 @@ async function listPegaResources() {
       "❌ Failed to list resources:",
       error.response?.data || error.message
     );
-    return null;
+    return {
+      error: error.message,
+      details: error.response?.data,
+    };
   }
 }
 
