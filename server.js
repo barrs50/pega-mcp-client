@@ -1,4 +1,3 @@
-import Anthropic from "@anthropic-ai/sdk";
 import express from "express";
 import axios from "axios";
 import dotenv from "dotenv";
@@ -13,12 +12,6 @@ const PORT = process.env.PORT || 3000;
 // Configuration
 const PEGA_MCP_URL = process.env.PEGA_MCP_URL;
 const PEGA_MCP_TOKEN = process.env.PEGA_MCP_TOKEN;
-const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-
-// Initialize Anthropic client
-const client = new Anthropic({
-  apiKey: ANTHROPIC_API_KEY,
-});
 
 // MCP Server configuration
 const mcpServers = {
@@ -38,26 +31,31 @@ async function initializePegaMCP() {
   try {
     console.log("🔄 Initializing Pega MCP Server...");
 
-    const response = await axios.post(PEGA_MCP_URL, {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2024-11-05",
-        capabilities: {
-          sampling: {},
-        },
-        clientInfo: {
-          name: "Railway-MCP-Client",
-          version: "1.0.0",
+    const response = await axios.post(
+      PEGA_MCP_URL,
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            sampling: {},
+          },
+          clientInfo: {
+            name: "Railway-MCP-Client",
+            version: "1.0.0",
+          },
         },
       },
-      headers: {
-        Authorization: `Bearer ${PEGA_MCP_TOKEN}`,
-        "Content-Type": "application/json",
-        Accept: "application/json, text/event-stream",
-      },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${PEGA_MCP_TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+      }
+    );
 
     console.log("✅ Pega MCP initialized:", response.data);
     return response.data;
@@ -97,6 +95,39 @@ async function listPegaTools() {
   } catch (error) {
     console.error(
       "❌ Failed to list tools:",
+      error.response?.data || error.message
+    );
+    return null;
+  }
+}
+
+/**
+ * List resources available from Pega MCP
+ */
+async function listPegaResources() {
+  try {
+    const response = await axios.post(
+      PEGA_MCP_URL,
+      {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "resources/list",
+        params: {},
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${PEGA_MCP_TOKEN}`,
+          "Content-Type": "application/json",
+          Accept: "application/json, text/event-stream",
+        },
+      }
+    );
+
+    console.log("📚 Available resources:", response.data);
+    return response.data;
+  } catch (error) {
+    console.error(
+      "❌ Failed to list resources:",
       error.response?.data || error.message
     );
     return null;
@@ -152,43 +183,16 @@ app.get("/api/mcp/tools", async (req, res) => {
 });
 
 /**
- * Endpoint to query Pega via Claude with MCP
+ * Endpoint to list Pega MCP resources
  */
-app.post("/api/query", async (req, res) => {
+app.get("/api/mcp/resources", async (req, res) => {
   try {
-    const { query } = req.body;
-
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        error: "query parameter is required",
-      });
-    }
-
-    console.log("🤔 Processing query:", query);
-
-    // Call Claude with Pega MCP tools
-    const response = await client.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1024,
-      messages: [
-        {
-          role: "user",
-          content: query,
-        },
-      ],
-      // Note: MCP integration in Claude SDK requires specific configuration
-      // This is a placeholder for proper MCP integration
-    });
-
+    const resources = await listPegaResources();
     res.json({
       success: true,
-      query: query,
-      response: response.content[0].text,
-      timestamp: new Date().toISOString(),
+      data: resources,
     });
   } catch (error) {
-    console.error("❌ Query failed:", error.message);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -243,9 +247,30 @@ app.get("/api/config", (req, res) => {
         configured: !!PEGA_MCP_TOKEN,
       },
     },
-    anthropic: {
-      configured: !!ANTHROPIC_API_KEY,
+    environment: {
+      node_env: process.env.NODE_ENV || "production",
+      port: PORT,
     },
+  });
+});
+
+/**
+ * Root endpoint with API documentation
+ */
+app.get("/", (req, res) => {
+  res.json({
+    name: "Pega MCP Client",
+    version: "1.0.0",
+    status: "running",
+    documentation: {
+      health: "GET /health",
+      config: "GET /api/config",
+      tools: "GET /api/mcp/tools",
+      resources: "GET /api/mcp/resources",
+      initialize: "POST /api/mcp/initialize",
+      oauth_callback: "GET /oauth/callback",
+    },
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -255,27 +280,21 @@ app.get("/api/config", (req, res) => {
 app.listen(PORT, () => {
   console.log(`\n🚀 Pega MCP Client running on port ${PORT}`);
   console.log(`📍 Endpoints:`);
+  console.log(`   GET  http://localhost:${PORT}/`);
   console.log(`   GET  http://localhost:${PORT}/health`);
   console.log(`   GET  http://localhost:${PORT}/api/config`);
   console.log(`   GET  http://localhost:${PORT}/api/mcp/tools`);
+  console.log(`   GET  http://localhost:${PORT}/api/mcp/resources`);
   console.log(`   POST http://localhost:${PORT}/api/mcp/initialize`);
-  console.log(`   POST http://localhost:${PORT}/api/query`);
   console.log(`   GET  http://localhost:${PORT}/oauth/callback\n`);
 
   // Test configuration on startup
-  if (!PEGA_MCP_URL || !PEGA_MCP_TOKEN || !ANTHROPIC_API_KEY) {
+  if (!PEGA_MCP_URL || !PEGA_MCP_TOKEN) {
     console.warn(
-      "⚠️  Warning: Missing environment variables. Please check your configuration."
+      "⚠️  Warning: Missing required environment variables. Please check your configuration."
     );
-    console.warn(
-      `   PEGA_MCP_URL: ${PEGA_MCP_URL ? "✓" : "✗"}`
-    );
-    console.warn(
-      `   PEGA_MCP_TOKEN: ${PEGA_MCP_TOKEN ? "✓" : "✗"}`
-    );
-    console.warn(
-      `   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY ? "✓" : "✗"}`
-    );
+    console.warn(`   PEGA_MCP_URL: ${PEGA_MCP_URL ? "✓" : "✗"}`);
+    console.warn(`   PEGA_MCP_TOKEN: ${PEGA_MCP_TOKEN ? "✓" : "✗"}`);
   } else {
     console.log("✅ All required environment variables are configured\n");
   }
